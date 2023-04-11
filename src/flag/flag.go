@@ -393,11 +393,11 @@ type FlagSet struct {
 	// to ExitOnError, which exits the program after calling Usage.
 	Usage func()
 
-	name          string
-	parsed        bool
-	actual        map[string]*Flag
-	formal        map[string]*Flag
-	args          []string // arguments after flags
+	name          string           // 执行的程序名 第一个参数
+	parsed        bool             // 是否解析
+	actual        map[string]*Flag // 已经解析的 flag map
+	formal        map[string]*Flag // 已经定义的 flag map
+	args          []string         // arguments after flags 要解析的参数
 	errorHandling ErrorHandling
 	output        io.Writer // nil means stderr; use Output() accessor
 }
@@ -993,7 +993,9 @@ func (f *FlagSet) Var(value Value, name string, usage string) {
 	}
 
 	// Remember the default value as a string; it won't change.
+	// 定义一个 flag 结构体
 	flag := &Flag{name, usage, value, value.String()}
+	// 不能重复定义相同名称的 flag
 	_, alreadythere := f.formal[name]
 	if alreadythere {
 		var msg string
@@ -1007,6 +1009,7 @@ func (f *FlagSet) Var(value Value, name string, usage string) {
 	if f.formal == nil {
 		f.formal = make(map[string]*Flag)
 	}
+	// 加到 map
 	f.formal[name] = flag
 }
 
@@ -1051,10 +1054,14 @@ func (f *FlagSet) parseOne() (bool, error) {
 		return false, nil
 	}
 	s := f.args[0]
+	// 必须已 - 开头 长度至少是2
+	// 例如 -d
 	if len(s) < 2 || s[0] != '-' {
 		return false, nil
 	}
+	// 从哪里取参数名
 	numMinuses := 1
+	// 如果第二个字符还是 -
 	if s[1] == '-' {
 		numMinuses++
 		if len(s) == 2 { // "--" terminates the flags
@@ -1062,16 +1069,20 @@ func (f *FlagSet) parseOne() (bool, error) {
 			return false, nil
 		}
 	}
+	// 解析出第一个 flag 名称
 	name := s[numMinuses:]
 	if len(name) == 0 || name[0] == '-' || name[0] == '=' {
 		return false, f.failf("bad flag syntax: %s", s)
 	}
 
 	// it's a flag. does it have an argument?
+	// 删除第一个参数
 	f.args = f.args[1:]
+	// 是否有值
 	hasValue := false
 	value := ""
 	for i := 1; i < len(name); i++ { // equals cannot be first
+		// 名称中包含 = 等号后面是值
 		if name[i] == '=' {
 			value = name[i+1:]
 			hasValue = true
@@ -1081,6 +1092,7 @@ func (f *FlagSet) parseOne() (bool, error) {
 	}
 
 	flag, ok := f.formal[name]
+	// 未定义的 flag
 	if !ok {
 		if name == "help" || name == "h" { // special case for nice help message.
 			f.usage()
@@ -1089,7 +1101,9 @@ func (f *FlagSet) parseOne() (bool, error) {
 		return false, f.failf("flag provided but not defined: -%s", name)
 	}
 
+	// 是否是 bool 类型的 flag
 	if fv, ok := flag.Value.(boolFlag); ok && fv.IsBoolFlag() { // special case: doesn't need an arg
+		// 有值设置值 无值直接置为 true
 		if hasValue {
 			if err := fv.Set(value); err != nil {
 				return false, f.failf("invalid boolean value %q for -%s: %v", value, name, err)
@@ -1101,9 +1115,11 @@ func (f *FlagSet) parseOne() (bool, error) {
 		}
 	} else {
 		// It must have a value, which might be the next argument.
+		// 上面的 name 中没有包含值 值就是下一个参数
 		if !hasValue && len(f.args) > 0 {
 			// value is the next arg
 			hasValue = true
+			// 取出第一个参数作为值 并删除第一个参数
 			value, f.args = f.args[0], f.args[1:]
 		}
 		if !hasValue {
