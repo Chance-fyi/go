@@ -2315,8 +2315,8 @@ func RedirectHandler(url string, code int) Handler {
 type ServeMux struct {
 	mu    sync.RWMutex
 	m     map[string]muxEntry
-	es    []muxEntry // slice of entries sorted from longest to shortest.
-	hosts bool       // whether any patterns contain hostnames
+	es    []muxEntry // slice of entries sorted from longest to shortest. 从最长到最短排序
+	hosts bool       // whether any patterns contain hostnames 是否有一个路由包含了主机名 host
 }
 
 type muxEntry struct {
@@ -2369,8 +2369,10 @@ func stripHostPort(h string) string {
 
 // Find a handler on a handler map given a path string.
 // Most-specific (longest) pattern wins.
+// 路由匹配
 func (mux *ServeMux) match(path string) (h Handler, pattern string) {
 	// Check for exact match first.
+	// 直接查 map
 	v, ok := mux.m[path]
 	if ok {
 		return v.h, v.pattern
@@ -2378,6 +2380,7 @@ func (mux *ServeMux) match(path string) (h Handler, pattern string) {
 
 	// Check for longest valid match.  mux.es contains all patterns
 	// that end in / sorted from longest to shortest.
+	// 最长前缀匹配
 	for _, e := range mux.es {
 		if strings.HasPrefix(path, e.pattern) {
 			return e.h, e.pattern
@@ -2521,15 +2524,19 @@ func (mux *ServeMux) Handle(pattern string, handler Handler) {
 	if handler == nil {
 		panic("http: nil handler")
 	}
+	// 不能重复注册路由
 	if _, exist := mux.m[pattern]; exist {
 		panic("http: multiple registrations for " + pattern)
 	}
 
+	// 初始化map
 	if mux.m == nil {
 		mux.m = make(map[string]muxEntry)
 	}
+	// 添加到map
 	e := muxEntry{h: handler, pattern: pattern}
 	mux.m[pattern] = e
+	// 最后一个字符是 / 则添加到切片
 	if pattern[len(pattern)-1] == '/' {
 		mux.es = appendSorted(mux.es, e)
 	}
@@ -2539,17 +2546,22 @@ func (mux *ServeMux) Handle(pattern string, handler Handler) {
 	}
 }
 
+// 添加到切片 并按最长到最短排序
 func appendSorted(es []muxEntry, e muxEntry) []muxEntry {
 	n := len(es)
+	// 二分查找到要插入的索引
 	i := sort.Search(n, func(i int) bool {
 		return len(es[i].pattern) < len(e.pattern)
 	})
+	// 最后一个直接 append
 	if i == n {
 		return append(es, e)
 	}
 	// we now know that i points at where we want to insert
+	// append一个空结构体
 	es = append(es, muxEntry{}) // try to grow the slice in place, any entry works.
-	copy(es[i+1:], es[i:])      // Move shorter entries down
+	// 所有元素后移一位
+	copy(es[i+1:], es[i:]) // Move shorter entries down
 	es[i] = e
 	return es
 }
@@ -2966,6 +2978,7 @@ func AllowQuerySemicolons(h Handler) Handler {
 // ListenAndServe always returns a non-nil error. After Shutdown or Close,
 // the returned error is ErrServerClosed.
 func (srv *Server) ListenAndServe() error {
+	// 处于关闭状态
 	if srv.shuttingDown() {
 		return ErrServerClosed
 	}
@@ -3024,6 +3037,7 @@ func (srv *Server) Serve(l net.Listener) error {
 	}
 
 	origListener := l
+	// 只执行一次关闭
 	l = &onceCloseListener{Listener: l}
 	defer l.Close()
 
@@ -3053,6 +3067,7 @@ func (srv *Server) Serve(l net.Listener) error {
 			if srv.shuttingDown() {
 				return ErrServerClosed
 			}
+			// 失败重试 5ms 10ms 20ms 最大 1s
 			if ne, ok := err.(net.Error); ok && ne.Temporary() {
 				if tempDelay == 0 {
 					tempDelay = 5 * time.Millisecond
@@ -3075,9 +3090,12 @@ func (srv *Server) Serve(l net.Listener) error {
 				panic("ConnContext returned nil")
 			}
 		}
+		// 重置重试时间
 		tempDelay = 0
+		// 创建新连接
 		c := srv.newConn(rw)
 		c.setState(c.rwc, StateNew, runHooks) // before Serve can return
+		// 开协程处理
 		go c.serve(connCtx)
 	}
 }
