@@ -481,6 +481,7 @@ func (l *LimitedReader) Read(p []byte) (n int, err error) {
 
 // NewSectionReader returns a SectionReader that reads from r
 // starting at offset off and stops with EOF after n bytes.
+// 从 r 中的偏移量 off 处读取 n 个字节后以 EOF 停止
 func NewSectionReader(r ReaderAt, off int64, n int64) *SectionReader {
 	var remaining int64
 	const maxint64 = 1<<63 - 1
@@ -498,15 +499,19 @@ func NewSectionReader(r ReaderAt, off int64, n int64) *SectionReader {
 // of an underlying ReaderAt.
 type SectionReader struct {
 	r     ReaderAt
-	base  int64
-	off   int64
-	limit int64
+	base  int64 // NewSectionReader 会将 base 设置为 off
+	off   int64 // 从 r 中的 off 偏移处开始读取数据
+	limit int64 // limit - off = SectionReader 流的长度
 }
 
 func (s *SectionReader) Read(p []byte) (n int, err error) {
+	// 超长返回 EOF
 	if s.off >= s.limit {
 		return 0, EOF
 	}
+	// max 是 SectionReader 流的长度
+	// 如果 p 的长度大于 max
+	// 只读取前 max 字节
 	if max := s.limit - s.off; int64(len(p)) > max {
 		p = p[0:max]
 	}

@@ -17,6 +17,7 @@ type multiReader struct {
 func (mr *multiReader) Read(p []byte) (n int, err error) {
 	for len(mr.readers) > 0 {
 		// Optimization to flatten nested multiReaders (Issue 13558).
+		// 只有一个且是 multiReader 的时候直接展开 避免递归
 		if len(mr.readers) == 1 {
 			if r, ok := mr.readers[0].(*multiReader); ok {
 				mr.readers = r.readers
