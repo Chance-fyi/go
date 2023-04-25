@@ -30,9 +30,9 @@ var (
 
 // Reader implements buffering for an io.Reader object.
 type Reader struct {
-	buf          []byte
+	buf          []byte    // 缓冲区
 	rd           io.Reader // reader provided by the client
-	r, w         int       // buf read and write positions
+	r, w         int       // buf read and write positions 读取与写入的位置
 	err          error
 	lastByte     int // last byte read for UnreadByte; -1 means invalid
 	lastRuneSize int // size of last rune read for UnreadRune; -1 means invalid
@@ -96,6 +96,7 @@ func (b *Reader) reset(buf []byte, r io.Reader) {
 var errNegativeRead = errors.New("bufio: reader returned negative count from Read")
 
 // fill reads a new chunk into the buffer.
+// 读取新数据到缓冲区中
 func (b *Reader) fill() {
 	// Slide existing data to beginning.
 	if b.r > 0 {
@@ -147,6 +148,7 @@ func (b *Reader) Peek(n int) ([]byte, error) {
 	b.lastByte = -1
 	b.lastRuneSize = -1
 
+	// 缓冲区不满 读取新数据
 	for b.w-b.r < n && b.w-b.r < len(b.buf) && b.err == nil {
 		b.fill() // b.w-b.r < len(b.buf) => buffer is not full
 	}
@@ -173,6 +175,7 @@ func (b *Reader) Peek(n int) ([]byte, error) {
 // If Discard skips fewer than n bytes, it also returns an error.
 // If 0 <= n <= b.Buffered(), Discard is guaranteed to succeed without
 // reading from the underlying io.Reader.
+// 跳过n个字节
 func (b *Reader) Discard(n int) (discarded int, err error) {
 	if n < 0 {
 		return 0, ErrNegativeCount
@@ -351,6 +354,7 @@ func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 	s := 0 // search start index
 	for {
 		// Search buffer.
+		// 查找分隔符 delim
 		if i := bytes.IndexByte(b.buf[b.r+s:b.w], delim); i >= 0 {
 			i += s
 			line = b.buf[b.r : b.r+i+1]
@@ -404,8 +408,13 @@ func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 // Calling UnreadByte after ReadLine will always unread the last byte read
 // (possibly a character belonging to the line end) even if that byte is not
 // part of the line returned by ReadLine.
+// isPrefix 一行的长度是否大于缓冲区长度
 func (b *Reader) ReadLine() (line []byte, isPrefix bool, err error) {
 	line, err = b.ReadSlice('\n')
+	// 缓冲区已满 并且读到最后一个 字符是 \r
+	// 将 b.r-1 将最后一个 \r 重新放回缓冲区
+	// 然后下一次读取找不到分隔符 将未读取数据移到开头
+	// 然后读取新数据到缓冲区
 	if err == ErrBufferFull {
 		// Handle the case where "\r\n" straddles the buffer.
 		if len(line) > 0 && line[len(line)-1] == '\r' {
@@ -429,6 +438,7 @@ func (b *Reader) ReadLine() (line []byte, isPrefix bool, err error) {
 	}
 	err = nil
 
+	// 删除换行符 \r\n
 	if line[len(line)-1] == '\n' {
 		drop := 1
 		if len(line) > 1 && line[len(line)-2] == '\r' {
